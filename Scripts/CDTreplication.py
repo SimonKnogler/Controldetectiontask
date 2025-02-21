@@ -4,18 +4,17 @@
 """
 Control Detection Task Demo (20 Trials, 0° vs 90° Counterbalanced)
 Using an Ornstein–Uhlenbeck process for distractor snippets.
-Implements a 2-up/1-down staircase with 5% steps (aiming for ~70% accuracy).
-Data is saved in columns in a CSV file with the following columns:
+Implements a 2-up/1-down staircase with 5% steps (aiming ~70% accuracy).
+
+**Saves exactly ONE .csv file** (no .log, no .pkl) to:
+'/Users/simonknogler/Desktop/PhD/Control Detection Task/data'
+
+Columns per trial (one row each):
   time, condition, accuracy, prop, rolling_acc, confidence
-
-The CSV is saved to:
-  '/Users/simonknogler/Desktop/PhD/Control Detection Task/data'
-
-Data will also be saved if the experiment is exited prematurely.
 """
 
 import os, sys, random, numpy as np
-from psychopy import visual, core, data, event, gui, logging
+from psychopy import visual, core, data, event, gui
 
 #############################################
 # 1. Experiment Setup
@@ -32,21 +31,18 @@ data_path = "/Users/simonknogler/Desktop/PhD/Controldetectiontask/data"
 if not os.path.isdir(data_path):
     os.makedirs(data_path)
 
-# Create ExperimentHandler (we only save CSV)
+# Create an ExperimentHandler that won't auto-save .log or .pkl
 thisExp = data.ExperimentHandler(
     name=expName,
     extraInfo=expInfo,
-    savePickle=False,   # do not save .pkl files
-    saveWideText=True,
+    savePickle=False,    # do not save .pkl
+    saveWideText=False,  # do not auto-save .csv
     dataFileName=os.path.join(data_path, filename)
 )
 
-logging.console.setLevel(logging.WARNING)
-logFile = logging.LogFile(os.path.join(data_path, filename + ".log"), level=logging.EXP)
-
 win = visual.Window(size=[1920,1080], fullscr=False, color=[0.5,0.5,0.5], units="pix")
 
-# Global clock to record trial start times
+# Global clock
 global_clock = core.Clock()
 
 #############################################
@@ -54,22 +50,19 @@ global_clock = core.Clock()
 #############################################
 
 def generate_OU_snippet(n_frames=300, theta=0.2, sigma=2.0, dt=1.0):
-    """Generate a snippet (n_frames x 2) using an OU process for velocity."""
+    """Generate snippet (n_frames x 2) using an OU process for velocity."""
     v = np.zeros((n_frames, 2))
     for t in range(1, n_frames):
         v[t,0] = v[t-1,0] - theta*v[t-1,0]*dt + sigma*np.random.randn()*np.sqrt(dt)
         v[t,1] = v[t-1,1] - theta*v[t-1,1]*dt + sigma*np.random.randn()*np.sqrt(dt)
     return v
 
-snippet_length = 300  # 5 seconds at ~60Hz
-num_snippets = 2000   # For demonstration; ideally generate more offline (e.g., 50,000)
+snippet_length = 300  # 5s @ 60Hz
+num_snippets = 2000
 library = []
-print("Generating OU snippet library...")
 for _ in range(num_snippets):
-    snippet = generate_OU_snippet(n_frames=snippet_length, theta=0.2, sigma=2.0, dt=1.0)
-    library.append(snippet)
+    library.append(generate_OU_snippet())
 library = np.array(library)
-print("Library shape:", library.shape)
 
 def get_random_snippet():
     idx = random.randrange(library.shape[0])
@@ -79,7 +72,7 @@ def get_random_snippet():
 # 3. Stimuli, Timing & Helper Functions
 #############################################
 
-trial_duration = 5.0  # seconds per trial
+trial_duration = 5.0
 feedback_isi   = 0.5
 
 square = visual.Rect(win, width=40, height=40, fillColor="black", lineColor="black")
@@ -97,69 +90,67 @@ def rotate_vector(x, y, angle_deg):
     theta = np.deg2rad(angle_deg)
     cosT  = np.cos(theta)
     sinT  = np.sin(theta)
-    return x*cosT - y*sinT, x*sinT + y*cosT
+    return (x*cosT - y*sinT, x*sinT + y*cosT)
 
 def random_positions():
-    """Generate starting positions for square and dot within ±250 px, at least 200 px apart."""
     while True:
         x1 = random.uniform(-250, 250)
         y1 = random.uniform(-250, 250)
-        if np.hypot(x1, y1) <= 250:
+        if (x1**2 + y1**2)**0.5 <= 250:
             x2 = random.uniform(-250, 250)
             y2 = random.uniform(-250, 250)
-            if np.hypot(x2, y2) <= 250 and np.hypot(x1-x2, y1-y2) >= 200:
-                return (x1, y1, x2, y2)
+            if (x2**2 + y2**2)**0.5 <= 250:
+                dist = ((x1 - x2)**2 + (y1 - y2)**2)**0.5
+                if dist >= 200:
+                    return (x1, y1, x2, y2)
 
 #############################################
-# 4. 2-up/1-down Staircase Setup
+# 4. 2-up/1-down Staircase
 #############################################
-# "prop" is the proportion of pre-recorded movement (snippet) used in the target.
-# A higher prop makes the task harder.
 prop_0deg = 0.60
 prop_90deg = 0.45
 step_size = 0.05
-min_prop = 0.0
-max_prop = 1.0
+min_prop  = 0.0
+max_prop  = 1.0
 
 consec_correct_0deg = 0
 consec_correct_90deg = 0
 
-history_0deg = []  # list for condition 0
-history_90deg = []  # list for condition 90
+history_0deg = []
+history_90deg = []
 
 def rolling_mean(arr, window=10):
-    if len(arr)==0:
+    if len(arr) == 0:
         return 0.0
     return np.mean(arr[-window:])
 
 #############################################
-# 5. Condition List (20 Trials, Counterbalanced)
+# 5. Condition List (20 Trials, 10 at 0°, 10 at 90°)
 #############################################
-# Create 10 trials for 0° and 10 trials for 90°, then shuffle.
-conditions_list = [{"angle": 0}]*10 + [{"angle": 90}]*10
+conditions_list = [{"angle":0}]*10 + [{"angle":90}]*10
 random.shuffle(conditions_list)
 
-shapes = ["square", "dot"]
+shapes = ["square","dot"]
 
 #############################################
 # 6. Instructions
 #############################################
 instruction_text.text = (
     "CONTROL DETECTION TASK (20-Trial Demo, 2-up/1-down)\n\n"
-    "There are 10 trials at 0° and 10 at 90° (counterbalanced, random order).\n"
-    "Move your mouse for 5 seconds each trial.\n"
-    "One shape is partly under your control (a mix of your movement and a random snippet),\n"
-    "and the other shape is entirely the snippet.\n\n"
-    "After each trial, choose which shape you controlled more and rate your confidence.\n"
-    "The staircase will adjust difficulty by changing the snippet proportion in 5% steps.\n\n"
-    "Press any key to begin."
+    "10 trials at 0°, 10 at 90°, randomly ordered.\n"
+    "Move your mouse for 5s each trial.\n"
+    "One shape is partly under your control (mixed with snippet),\n"
+    "the other shape is purely snippet.\n\n"
+    "After each trial, choose which shape you controlled more, then rate your confidence.\n"
+    "The staircase adjusts difficulty in 5% steps.\n\n"
+    "Press any key to start."
 )
 instruction_text.draw()
 win.flip()
 event.waitKeys()
 
 #############################################
-# 7. Main Task (Wrapped in try-finally to save data on premature exit)
+# 7. Main Task (try-finally to ensure CSV is saved if user quits)
 #############################################
 
 try:
@@ -170,7 +161,7 @@ try:
         trial_count += 1
         angle_bias = trial_info["angle"]
 
-        # Decide proportion for this trial before update
+        # Current proportion before updating
         if angle_bias == 0:
             prop_trial = prop_0deg
             rolling_acc = rolling_mean(history_0deg)
@@ -178,20 +169,20 @@ try:
             prop_trial = prop_90deg
             rolling_acc = rolling_mean(history_90deg)
 
-        # Record trial start time
+        # Trial start time
         trial_time = global_clock.getTime()
 
-        # Show fixation
+        # Fixation
         fixation.draw()
         win.flip()
         core.wait(0.5)
 
-        # Set random positions
+        # Random positions
         sqX, sqY, dotX, dotY = random_positions()
         square.pos = (sqX, sqY)
-        dot.pos = (dotX, dotY)
+        dot.pos    = (dotX, dotY)
 
-        # Randomly select target shape
+        # Randomly pick target shape
         tShape = random.choice(shapes)
 
         # Movement loop
@@ -209,31 +200,30 @@ try:
             dy = my - last_my
             last_mx, last_my = mx, my
 
-            # Retrieve snippet displacement for current frame
             pre_dx, pre_dy = snippet[frameN % snippet_length]
-            mag_mouse = np.hypot(dx, dy)
-            mag_snippet = np.hypot(pre_dx, pre_dy)
+            mag_mouse   = (dx**2 + dy**2)**0.5
+            mag_snippet = (pre_dx**2 + pre_dy**2)**0.5
+
             if mag_snippet > 0:
                 norm_pre_dx = (pre_dx / mag_snippet) * mag_mouse
                 norm_pre_dy = (pre_dy / mag_snippet) * mag_mouse
             else:
                 norm_pre_dx, norm_pre_dy = 0, 0
 
-            # Apply angular bias to participant's movement
             dx_biased, dy_biased = rotate_vector(dx, dy, angle_bias)
 
-            # For target, mix participant's movement and snippet according to prop_trial
+            # Target
             targ_dx = (1 - prop_trial)*dx_biased + prop_trial*norm_pre_dx
             targ_dy = (1 - prop_trial)*dy_biased + prop_trial*norm_pre_dy
-            # Distractor uses snippet only
+            # Distractor
             dist_dx = norm_pre_dx
             dist_dy = norm_pre_dy
 
             if tShape == "square":
                 square.pos = confine_position((square.pos[0] + targ_dx, square.pos[1] + targ_dy), 250)
-                dot.pos = confine_position((dot.pos[0] + dist_dx, dot.pos[1] + dist_dy), 250)
+                dot.pos    = confine_position((dot.pos[0] + dist_dx,  dot.pos[1] + dist_dy), 250)
             else:
-                dot.pos = confine_position((dot.pos[0] + targ_dx, dot.pos[1] + targ_dy), 250)
+                dot.pos    = confine_position((dot.pos[0] + targ_dx,  dot.pos[1] + targ_dy), 250)
                 square.pos = confine_position((square.pos[0] + dist_dx, square.pos[1] + dist_dy), 250)
 
             square.draw()
@@ -241,7 +231,7 @@ try:
             win.flip()
             frameN += 1
 
-        # Forced-choice response for control detection
+        # Forced choice
         choice_text = visual.TextStim(win,
             text="Which shape did you control more?\n(S) Square   (D) Dot",
             color="white", height=30)
@@ -253,7 +243,7 @@ try:
         chosen_shape = "square" if ckey[0] == "s" else "dot"
         accuracy = 1 if (chosen_shape == tShape) else 0
 
-        # Confidence rating
+        # Confidence
         conf_text = visual.TextStim(win,
             text="Confidence?\n(L) Low   (H) High",
             color="white", height=30)
@@ -267,10 +257,10 @@ try:
         win.flip()
         core.wait(feedback_isi)
 
-        # --- Staircase update (2-up/1-down) ---
+        # Staircase update (2-up/1-down)
         if angle_bias == 0:
             if accuracy == 1:
-                consec_correct_0deg = consec_correct_0deg + 1
+                consec_correct_0deg += 1
                 if consec_correct_0deg == 2:
                     prop_0deg = min(prop_0deg + step_size, max_prop)
                     consec_correct_0deg = 0
@@ -278,11 +268,9 @@ try:
                 prop_0deg = max(prop_0deg - step_size, min_prop)
                 consec_correct_0deg = 0
             history_0deg.append(accuracy)
-            new_roll_acc = rolling_mean(history_0deg)
-            print(f"Trial {trial_count} (0°): new prop = {prop_0deg:.2f}, rolling acc = {new_roll_acc:.2f}")
         else:
             if accuracy == 1:
-                consec_correct_90deg = consec_correct_90deg + 1
+                consec_correct_90deg += 1
                 if consec_correct_90deg == 2:
                     prop_90deg = min(prop_90deg + step_size, max_prop)
                     consec_correct_90deg = 0
@@ -290,23 +278,23 @@ try:
                 prop_90deg = max(prop_90deg - step_size, min_prop)
                 consec_correct_90deg = 0
             history_90deg.append(accuracy)
-            new_roll_acc = rolling_mean(history_90deg)
-            print(f"Trial {trial_count} (90°): new prop = {prop_90deg:.2f}, rolling acc = {new_roll_acc:.2f}")
 
-        # --- Save trial data in columns ---
+        # Save columns
         thisExp.addData("time", trial_time)
-        thisExp.addData("condition", str(angle_bias))
-        thisExp.addData("accuracy", accuracy)
-        thisExp.addData("prop", prop_trial)
-        thisExp.addData("rolling_acc", rolling_acc)
-        thisExp.addData("confidence", confidence)
+        thisExp.addData("condition", str(angle_bias))  # "0" or "90"
+        thisExp.addData("accuracy", accuracy)          # 1 or 0
+        thisExp.addData("prop", prop_trial)            # proportion used
+        thisExp.addData("rolling_acc", rolling_acc)    # rolling accuracy prior to this trial
+        thisExp.addData("confidence", confidence)      # "low" or "high"
         thisExp.nextEntry()
 
 except KeyboardInterrupt:
     print("Experiment exited prematurely; saving data...")
 
 finally:
-    # Save CSV even if the experiment is interrupted
-    thisExp.saveAsWideText(os.path.join(data_path, filename + ".csv"))
+    # Save the single CSV
+    csv_path = os.path.join(data_path, filename + ".csv")
+    thisExp.saveAsWideText(csv_path)
+    print(f"Data saved to: {csv_path}")
     win.close()
     core.quit()
