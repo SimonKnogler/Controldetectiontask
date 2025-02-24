@@ -1,0 +1,4 @@
+﻿thisRow.t,notes,time,condition,accuracy,prop,rolling_acc,confidence,participant,session,
+,,5.3340045269578695e-06,90,1,0.45,0.0,high,1231312312,001,
+,,8.254663667001296,90,0,0.45,1.0,low,1231312312,001,
+,,17.04492204199778,0,0,0.6,0.0,high,1231312312,001,
