@@ -3,9 +3,9 @@
 
 """
 Control Detection Task with Two Staircases (Blue ~60%, Green ~90%),
-4-point (control+confidence) + 0-100 rating, color-coded shapes,
-Training & Test phases, and a less-jittery distractor motion
-(OU snippet with lower sigma, higher momentum).
+4-point (control+confidence) + 0–100 rating, color-coded shapes,
+Training & Test phases, and NO jitter (both shapes move smoothly)
+WITHOUT magnitude normalization (avoiding corner locks).
 """
 
 import os, random, numpy as np
@@ -15,7 +15,7 @@ from psychopy import visual, core, data, event, gui
 # 1. Experiment Setup
 #############################################
 
-expName = "ControlDetection_TwoStaircases_LessJitter"
+expName = "ControlDetection_TwoStaircases_NoJitter_Fixed"
 expInfo = {"participant": "", "session": "001"}
 dlg = gui.DlgFromDict(dictionary=expInfo, title=expName)
 if not dlg.OK:
@@ -26,7 +26,6 @@ data_path = "/Users/simonknogler/Desktop/PhD/Controldetectiontask/data"
 if not os.path.isdir(data_path):
     os.makedirs(data_path)
 
-# Create an ExperimentHandler (won't auto-save .log/.pkl, only wide text we do ourselves)
 thisExp = data.ExperimentHandler(
     name=expName,
     extraInfo=expInfo,
@@ -35,17 +34,20 @@ thisExp = data.ExperimentHandler(
     dataFileName=os.path.join(data_path, filename)
 )
 
-# PsychoPy Window
-win = visual.Window(size=[1920, 1080], fullscr=True, color=[0.5,0.5,0.5], units="pix")
-global_clock = core.Clock()
+win = visual.Window(size=[1920,1080], fullscr=True, color=[0.5,0.5,0.5], units="pix")
 
 #############################################
-# 2. Stimuli & Helper Functions
+# 2. Helper Functions & Stimuli
 #############################################
 
 def confine_position(pos, limit=250):
-    """Keep (x,y) within a circle of radius=limit."""
+    """Clamp (x,y) within a circle of radius=limit."""
     x, y = pos
+    # Simple bounding box. If you truly want a circular boundary,
+    # you can do a radial check, but a bounding box is often enough.
+    # For a circle, you'd do:
+    #  if np.hypot(x,y) > limit: scale down so that it sits on the circle boundary.
+    # For simplicity, we keep the bounding approach from your code:
     x = max(-limit, min(x, limit))
     y = max(-limit, min(y, limit))
     return (x, y)
@@ -58,10 +60,7 @@ def rotate_vector(x, y, angle_deg):
     return (x*cosT - y*sinT, x*sinT + y*cosT)
 
 def random_positions():
-    """
-    Random non-overlapping positions for square & dot within radius=250.
-    Ensures at least 200 px distance between them.
-    """
+    """Random non-overlapping positions for two shapes in circle ~250 px."""
     while True:
         x1 = random.uniform(-250, 250)
         y1 = random.uniform(-250, 250)
@@ -69,39 +68,45 @@ def random_positions():
             x2 = random.uniform(-250, 250)
             y2 = random.uniform(-250, 250)
             if np.hypot(x2, y2) <= 250:
-                if np.hypot(x1 - x2, y1 - y2) >= 200:
+                dist = np.hypot(x1 - x2, y1 - y2)
+                if dist >= 200:
                     return (x1, y1, x2, y2)
 
-# Visual stimuli
-square = visual.Rect(win, width=40, height=40, fillColor="black", lineColor="black")
-dot    = visual.Circle(win, radius=20, fillColor="black", lineColor="black")
+square   = visual.Rect(win, width=40, height=40, fillColor="black", lineColor="black")
+dot      = visual.Circle(win, radius=20, fillColor="black", lineColor="black")
 fixation = visual.TextStim(win, text="+", color="white", height=30)
 instruction_text = visual.TextStim(win, text="", color="white", height=28, wrapWidth=1000)
 
-def generate_OU_snippet(n_frames=300, theta=0.2, sigma=0.8, dt=1.0,
-                        linear_bias=(0,0), angular_bias=0):
+#############################################
+# 3. Generate a Constant-Velocity Snippet (No Jitter)
+#############################################
+
+def generate_constant_snippet(n_frames=300, speed_min=0.3, speed_max=1.0):
     """
-    Ornstein-Uhlenbeck snippet with reduced sigma=0.8 for less jitter.
+    Return shape (n_frames,2), all with the SAME velocity
+    in a random direction at a random speed within [speed_min, speed_max].
     """
     v = np.zeros((n_frames, 2))
-    for t in range(1, n_frames):
-        # Basic OU update
-        v[t,0] = v[t-1,0] - theta * v[t-1,0] * dt + sigma * np.random.randn() * np.sqrt(dt) + linear_bias[0]*dt
-        v[t,1] = v[t-1,1] - theta * v[t-1,1] * dt + sigma * np.random.randn() * np.sqrt(dt) + linear_bias[1]*dt
-        # Apply angular bias
-        speed = np.hypot(v[t,0], v[t,1])
-        angle = np.arctan2(v[t,1], v[t,0]) + angular_bias*dt
-        v[t,0] = speed*np.cos(angle)
-        v[t,1] = speed*np.sin(angle)
+    angle_deg = random.uniform(0, 360)
+    speed     = random.uniform(speed_min, speed_max)
+
+    angle_rad = np.deg2rad(angle_deg)
+    vx = speed*np.cos(angle_rad)
+    vy = speed*np.sin(angle_rad)
+
+    # Fill entire snippet with the same (vx, vy)
+    for i in range(n_frames):
+        v[i,0] = vx
+        v[i,1] = vy
     return v
 
 #############################################
-# 3. (Optional) Free Movement Demo to Estimate Bias
+# 4. Optional Free Movement Demo to Estimate Bias
 #############################################
 
 instruction_text.text = (
-    "FREE-MOVEMENT DEMO (30s)\n\n"
-    "Move your mouse. One shape is partly under your control.\n"
+    "FREE-MOVEMENT DEMO (30s)\n"
+    "Move your mouse. One shape is partly under your control.\n\n"
     "Press any key to start."
 )
 instruction_text.draw()
@@ -116,48 +121,43 @@ core.wait(0.5)
 sqX, sqY, dotX, dotY = random_positions()
 square.pos = (sqX, sqY)
 dot.pos    = (dotX, dotY)
-tShape     = random.choice(["square", "dot"])
+tShape     = random.choice(["square","dot"])
 
-pre_trial_n_frames = int(pre_trial_duration * 60)
-dummy_snippet = generate_OU_snippet(n_frames=pre_trial_n_frames, sigma=0.8, dt=1.0)
-# We'll do everything with sigma=0.8 in this example for less jitter.
+demo_n_frames = int(pre_trial_duration*60)
+demo_snippet = generate_constant_snippet(n_frames=demo_n_frames, speed_min=0.3, speed_max=1.0)
 
-# For the free movement, let's keep some moderate parameters
-distractor_velocity = np.array([0.0, 0.0])
 momentum_coef = 0.8
-prop_demo = 0.6
+prop_demo     = 0.6
 
 mouse = event.Mouse(win=win, visible=True)
 mouse.setPos((0,0))
 last_mx, last_my = mouse.getPos()
 pre_movements = []
-pre_clock = core.Clock()
-pre_clock.reset()
+demo_clock = core.Clock()
+demo_clock.reset()
 frameN = 0
 
-while pre_clock.getTime() < pre_trial_duration:
+while demo_clock.getTime() < pre_trial_duration:
     mx, my = mouse.getPos()
     dx = mx - last_mx
     dy = my - last_my
     pre_movements.append((dx, dy))
     last_mx, last_my = mx, my
 
-    ou_dx, ou_dy = dummy_snippet[frameN % pre_trial_n_frames]
-    mag_mouse   = np.hypot(dx, dy)
-    mag_snippet = np.hypot(ou_dx, ou_dy)
-    if mag_snippet > 0:
-        norm_ou_dx = (ou_dx/mag_snippet)*mag_mouse
-        norm_ou_dy = (ou_dy/mag_snippet)*mag_mouse
+    vx_snp, vy_snp = demo_snippet[frameN % demo_n_frames]
+
+    # Weighted sum for the "controlled" shape
+    targ_dx = (1 - prop_demo)*dx + prop_demo*vx_snp
+    targ_dy = (1 - prop_demo)*dy + prop_demo*vy_snp
+
+    # For distractor, we do momentum on snippet
+    # so it keeps drifting smoothly
+    # e.g. dist_vel = momentum * dist_vel + (1-momentum)*(vx_snp, vy_snp)
+    # We'll store distractor_velocity in a variable:
+    if frameN == 0:
+        distractor_velocity = np.array([vx_snp, vy_snp])
     else:
-        norm_ou_dx, norm_ou_dy = 0, 0
-
-    # Mix direct mouse with snippet
-    targ_dx = (1 - prop_demo)*dx + prop_demo*norm_ou_dx
-    targ_dy = (1 - prop_demo)*dy + prop_demo*norm_ou_dy
-
-    # Distractor with momentum
-    current_ou_velocity = np.array([norm_ou_dx, norm_ou_dy])
-    distractor_velocity = momentum_coef*distractor_velocity + (1 - momentum_coef)*current_ou_velocity
+        distractor_velocity = momentum_coef*distractor_velocity + (1 - momentum_coef)*np.array([vx_snp, vy_snp])
     dist_dx, dist_dy = distractor_velocity
 
     if tShape == "square":
@@ -172,16 +172,17 @@ while pre_clock.getTime() < pre_trial_duration:
     win.flip()
     frameN += 1
 
-choice_text = visual.TextStim(win, text="Which shape did you control more?\n(S) Square   (D) Dot",
-                              color="white", height=30)
+choice_text = visual.TextStim(win,
+    text="Which shape did you control more?\n(S) Square   (D) Dot",
+    color="white", height=30)
 choice_text.draw()
 win.flip()
-key = event.waitKeys(keyList=["s", "d", "escape"])
-if "escape" in key:
+resp = event.waitKeys(keyList=["s","d","escape"])
+if "escape" in resp:
     core.quit()
-pre_choice = "square" if key[0]=="s" else "dot"
+pre_choice = "square" if resp[0]=="s" else "dot"
 
-# Estimate linear & angular biases
+# Estimate user bias from their raw mouse movements
 pre_movements = np.array(pre_movements)
 avg_linear_bias = pre_movements.mean(axis=0)
 angles = np.arctan2(pre_movements[:,1], pre_movements[:,0])
@@ -190,134 +191,135 @@ angular_changes = (angular_changes + np.pi) % (2*np.pi) - np.pi
 avg_angular_bias = angular_changes.mean() if angular_changes.size>0 else 0
 
 #############################################
-# 4. Generate OU Library for Main Task (with bias)
+# 5. Create a Library of Constant-Velocity Snippets
 #############################################
 
-snippet_length = 300
-num_snippets = 1000  # fewer if you want to reduce memory
-ou_library = []
+snippet_length = 300  # ~5s
+num_snippets = 1000
+snippet_library = []
 for _ in range(num_snippets):
-    s = generate_OU_snippet(n_frames=snippet_length, sigma=0.8, dt=1.0,
-                            linear_bias=avg_linear_bias, angular_bias=avg_angular_bias)
-    ou_library.append(s)
-ou_library = np.array(ou_library)
+    s = generate_constant_snippet(n_frames=snippet_length, speed_min=0.3, speed_max=1.0)
+    snippet_library.append(s)
+snippet_library = np.array(snippet_library)
 
 #############################################
-# 5. Two Staircases (Practice Phase): Blue ~60%, Green ~90%
+# 6. Two Staircases: Blue ~60%, Green ~90%
 #############################################
 
 blue_prop = 0.50
-green_prop = 0.70
+green_prop= 0.70
 blue_correct = 0
 blue_total   = 0
-green_correct = 0
-green_total   = 0
+green_correct= 0
+green_total  = 0
 TARGET_BLUE  = 0.60
 TARGET_GREEN = 0.90
 STEP_SIZE    = 0.05
 
-angles_practice = [0]*5 + [90]*5
-random.shuffle(angles_practice)
-colors_practice = ["blue"]*5 + ["green"]*5
-random.shuffle(colors_practice)
-practice_conditions = list(zip(angles_practice, colors_practice))
+# 10 practice trials: 5 at angle=0°, 5 at angle=90°, random color
+angles_prac  = [0]*5 + [90]*5
+random.shuffle(angles_prac)
+colors_prac  = ["blue"]*5 + ["green"]*5
+random.shuffle(colors_prac)
+practice_conditions = list(zip(angles_prac, colors_prac))
 random.shuffle(practice_conditions)
 
 instruction_text.text = (
     "PRACTICE PHASE (10 trials):\n"
-    " - Color cues: blue (~60%) or green (~90%).\n"
-    " - Each trial also has angle=0° or 90°.\n"
-    " - After these 10, we finalize each color's proportion.\n\n"
+    " - Color cue: blue (~60%) or green (~90%)\n"
+    " - Each trial also has angle=0° or 90°.\n\n"
     "Press any key to start."
 )
 instruction_text.draw()
 win.flip()
 event.waitKeys()
 
+#############################################
+# 7. Practice Trial (No Jitter)
+#############################################
+
 def run_practice_trial(angle_bias, color_cue, blue_prop, green_prop):
     """
-    Single practice trial with less jittery approach:
-    - OU snippet (sigma=0.8)
-    - momentum_coef=0.95 for the distractor
-    Returns: (accuracy, chosen_shape, chosen_conf, rating_value, true_shape).
+    Single practice trial with no jitter snippet:
+     - Weighted sum for the 'controlled' shape: (1-prop)*mouse + prop*snippet
+     - Distractor uses momentum on snippet
+     - Also rotate the mouse movement by angle_bias
+     - No magnitude normalization
     """
-    # Fixation color & shape color
-    if color_cue=="blue":
+    # Which proportion to use
+    if color_cue == "blue":
         fix_color = "blue"
-        prop_trial = blue_prop
+        prop_trial= blue_prop
     else:
         fix_color = "green"
-        prop_trial = green_prop
+        prop_trial= green_prop
 
+    # Color everything
     fixation.color = fix_color
     square.fillColor = fix_color
     square.lineColor = fix_color
     dot.fillColor    = fix_color
     dot.lineColor    = fix_color
 
+    # Fixation
     fixation.draw()
     win.flip()
     core.wait(0.5)
 
+    # Random positions
     sqX, sqY, dotX, dotY = random_positions()
     square.pos = (sqX, sqY)
     dot.pos    = (dotX, dotY)
     tShape     = random.choice(["square","dot"])
 
-    snippet_index = random.randrange(ou_library.shape[0])
-    snippet = ou_library[snippet_index]
+    # Grab snippet
+    snippet_index = random.randrange(snippet_library.shape[0])
+    snippet = snippet_library[snippet_index]
+
+    # For distractor smoothing
+    momentum_coef = 0.95
+    distractor_velocity = np.array([0,0], dtype=float)
+
+    # Mouse / timing
     mouse = event.Mouse(win=win, visible=False)
     mouse.setPos((0,0))
-
-    # (CHANGED) Higher momentum to reduce jitter
-    momentum_coef = 0.95
-    distractor_velocity = np.array([0.0, 0.0])
     clock = core.Clock()
     clock.reset()
     last_mx, last_my = 0, 0
     frameN = 0
 
-    while clock.getTime() < 5.0:
+    while clock.getTime()<5.0:
         mx, my = mouse.getPos()
         dx = mx - last_mx
         dy = my - last_my
         last_mx, last_my = mx, my
 
-        ou_dx, ou_dy = snippet[frameN % snippet_length]
-
-        # Rotate mouse by angle_bias
+        # Rotate user's mouse by angle_bias
         dx_biased, dy_biased = rotate_vector(dx, dy, angle_bias)
 
-        # Compare magnitudes
-        mag_mouse   = np.hypot(dx_biased, dy_biased)
-        mag_snippet = np.hypot(ou_dx, ou_dy)
-        if mag_snippet > 0:
-            norm_ou_dx = (ou_dx / mag_snippet) * mag_mouse
-            norm_ou_dy = (ou_dy / mag_snippet) * mag_mouse
-        else:
-            norm_ou_dx, norm_ou_dy = 0, 0
+        vx_snp, vy_snp = snippet[frameN % snippet_length]
 
-        targ_dx = (1 - prop_trial)*dx_biased + prop_trial*norm_ou_dx
-        targ_dy = (1 - prop_trial)*dy_biased + prop_trial*norm_ou_dy
+        # Weighted sum for the shape that is under partial user control
+        targ_dx = (1 - prop_trial)*dx_biased + prop_trial*vx_snp
+        targ_dy = (1 - prop_trial)*dy_biased + prop_trial*vy_snp
 
-        # Update distractor with momentum
-        current_ou_velocity = np.array([norm_ou_dx, norm_ou_dy])
-        distractor_velocity = momentum_coef*distractor_velocity + (1 - momentum_coef)*current_ou_velocity
+        # For the distractor, apply momentum to snippet velocity
+        distractor_velocity = momentum_coef*distractor_velocity + (1 - momentum_coef)*np.array([vx_snp, vy_snp])
         dist_dx, dist_dy = distractor_velocity
 
         if tShape=="square":
-            square.pos = confine_position((square.pos[0]+targ_dx, square.pos[1]+targ_dy))
-            dot.pos    = confine_position((dot.pos[0]+dist_dx, dot.pos[1]+dist_dy))
+            square.pos = confine_position((square.pos[0]+targ_dx, square.pos[1]+targ_dy), 250)
+            dot.pos    = confine_position((dot.pos[0]+dist_dx, dot.pos[1]+dist_dy), 250)
         else:
-            dot.pos    = confine_position((dot.pos[0]+targ_dx, dot.pos[1]+targ_dy))
-            square.pos = confine_position((square.pos[0]+dist_dx, square.pos[1]+dist_dy))
+            dot.pos    = confine_position((dot.pos[0]+targ_dx, dot.pos[1]+targ_dy), 250)
+            square.pos = confine_position((square.pos[0]+dist_dx, square.pos[1]+dist_dy), 250)
 
         square.draw()
         dot.draw()
         win.flip()
         frameN += 1
 
-    # 4-point control+confidence
+    # 4-point response
     resp_text = (
         "Which shape did you control, and how confident are you?\n"
         "1 = Square (Guess)\n"
@@ -325,24 +327,23 @@ def run_practice_trial(angle_bias, color_cue, blue_prop, green_prop):
         "3 = Dot    (Guess)\n"
         "4 = Dot    (Confident)"
     )
-    resp_stim = visual.TextStim(win, text=resp_text, color="white", height=26)
-    resp_stim.draw()
+    prompt = visual.TextStim(win, text=resp_text, color="white", height=26)
+    prompt.draw()
     win.flip()
 
     key_resp = event.waitKeys(keyList=["1","2","3","4","escape"])
     if "escape" in key_resp:
         core.quit()
-
     choice_map = {
-        "1": ("square","guess"),
-        "2": ("square","confident"),
-        "3": ("dot","guess"),
-        "4": ("dot","confident")
+        "1":("square","guess"),
+        "2":("square","confident"),
+        "3":("dot","guess"),
+        "4":("dot","confident")
     }
     chosen_shape, chosen_conf = choice_map[key_resp[0]]
     accuracy = 1 if (chosen_shape == tShape) else 0
 
-    # 0–100 rating
+    # 0-100 rating
     rating_text = "How much control did you feel (0–100)?"
     rating_stim = visual.TextStim(win, text=rating_text, color="white", height=28)
     rating_stim.draw()
@@ -356,10 +357,10 @@ def run_practice_trial(angle_bias, color_cue, blue_prop, green_prop):
             if k in ["return","enter"]:
                 done_rating = True
                 break
-            elif k == "backspace":
+            elif k=="backspace":
                 rating_string = rating_string[:-1]
             elif k.isdigit():
-                if len(rating_string) < 3:
+                if len(rating_string)<3:
                     rating_string += k
             elif k=="escape":
                 core.quit()
@@ -376,13 +377,12 @@ def run_practice_trial(angle_bias, color_cue, blue_prop, green_prop):
     return accuracy, chosen_shape, chosen_conf, rating_value, tShape
 
 #############################################
-# 6. Test Phase (True vs. Medium; 0° vs. 90°)
+# 8. Test Phase
 #############################################
 
 def run_test_trial(angle_bias, color_cue, true_or_med, blue_final, green_final, medium_prop):
     """
-    Similar to run_practice_trial but picks final vs. medium proportion.
-    Also uses higher momentum_coef=0.95 to reduce jitter.
+    Same no-jitter approach, using either the color's final proportion or the medium.
     """
     if color_cue=="blue":
         fix_color  = "blue"
@@ -406,57 +406,45 @@ def run_test_trial(angle_bias, color_cue, true_or_med, blue_final, green_final, 
     dot.pos    = (dotX, dotY)
     tShape     = random.choice(["square","dot"])
 
-    snippet_index = random.randrange(ou_library.shape[0])
-    snippet = ou_library[snippet_index]
+    snippet = snippet_library[random.randrange(snippet_library.shape[0])]
+    momentum_coef = 0.95
+    distractor_velocity = np.array([0,0], dtype=float)
 
     mouse = event.Mouse(win=win, visible=False)
     mouse.setPos((0,0))
-    # Again, higher momentum
-    momentum_coef = 0.95
-    distractor_velocity = np.array([0.0, 0.0])
     clock = core.Clock()
     clock.reset()
     last_mx, last_my = 0, 0
     frameN = 0
 
-    while clock.getTime() < 5.0:
+    while clock.getTime()<5.0:
         mx, my = mouse.getPos()
         dx = mx - last_mx
         dy = my - last_my
         last_mx, last_my = mx, my
 
-        ou_dx, ou_dy = snippet[frameN % snippet_length]
-
         dx_biased, dy_biased = rotate_vector(dx, dy, angle_bias)
 
-        mag_mouse   = np.hypot(dx_biased, dy_biased)
-        mag_snippet = np.hypot(ou_dx, ou_dy)
-        if mag_snippet > 0:
-            norm_ou_dx = (ou_dx/mag_snippet)*mag_mouse
-            norm_ou_dy = (ou_dy/mag_snippet)*mag_mouse
-        else:
-            norm_ou_dx, norm_ou_dy = 0, 0
+        vx_snp, vy_snp = snippet[frameN % snippet_length]
 
-        targ_dx = (1 - prop_trial)*dx_biased + prop_trial*norm_ou_dx
-        targ_dy = (1 - prop_trial)*dy_biased + prop_trial*norm_ou_dy
+        targ_dx = (1 - prop_trial)*dx_biased + prop_trial*vx_snp
+        targ_dy = (1 - prop_trial)*dy_biased + prop_trial*vy_snp
 
-        current_ou_velocity = np.array([norm_ou_dx, norm_ou_dy])
-        distractor_velocity = momentum_coef*distractor_velocity + (1 - momentum_coef)*current_ou_velocity
+        distractor_velocity = momentum_coef*distractor_velocity + (1 - momentum_coef)*np.array([vx_snp, vy_snp])
         dist_dx, dist_dy = distractor_velocity
 
         if tShape=="square":
-            square.pos = confine_position((square.pos[0]+targ_dx, square.pos[1]+targ_dy))
-            dot.pos    = confine_position((dot.pos[0]+dist_dx, dot.pos[1]+dist_dy))
+            square.pos = confine_position((square.pos[0]+targ_dx, square.pos[1]+targ_dy), 250)
+            dot.pos    = confine_position((dot.pos[0]+dist_dx, dot.pos[1]+dist_dy), 250)
         else:
-            dot.pos    = confine_position((dot.pos[0]+targ_dx, dot.pos[1]+targ_dy))
-            square.pos = confine_position((square.pos[0]+dist_dx, square.pos[1]+dist_dy))
+            dot.pos    = confine_position((dot.pos[0]+targ_dx, dot.pos[1]+targ_dy), 250)
+            square.pos = confine_position((square.pos[0]+dist_dx, square.pos[1]+dist_dy), 250)
 
         square.draw()
         dot.draw()
         win.flip()
         frameN += 1
 
-    # 4-point response
     resp_text = (
         "Which shape did you control, and how confident are you?\n"
         "1 = Square (Guess)\n"
@@ -464,23 +452,22 @@ def run_test_trial(angle_bias, color_cue, true_or_med, blue_final, green_final, 
         "3 = Dot    (Guess)\n"
         "4 = Dot    (Confident)"
     )
-    resp_stim = visual.TextStim(win, text=resp_text, color="white", height=26)
-    resp_stim.draw()
+    prompt = visual.TextStim(win, text=resp_text, color="white", height=26)
+    prompt.draw()
     win.flip()
+
     key_resp = event.waitKeys(keyList=["1","2","3","4","escape"])
     if "escape" in key_resp:
         core.quit()
-
     choice_map = {
-        "1": ("square","guess"),
-        "2": ("square","confident"),
-        "3": ("dot","guess"),
-        "4": ("dot","confident")
+        "1":("square","guess"),
+        "2":("square","confident"),
+        "3":("dot","guess"),
+        "4":("dot","confident")
     }
     chosen_shape, chosen_conf = choice_map[key_resp[0]]
     accuracy = 1 if (chosen_shape == tShape) else 0
 
-    # 0–100 rating
     rating_text = "How much control did you feel (0–100)?"
     rating_stim = visual.TextStim(win, text=rating_text, color="white", height=28)
     rating_stim.draw()
@@ -494,10 +481,10 @@ def run_test_trial(angle_bias, color_cue, true_or_med, blue_final, green_final, 
             if k in ["return","enter"]:
                 done_rating = True
                 break
-            elif k == "backspace":
+            elif k=="backspace":
                 rating_string = rating_string[:-1]
             elif k.isdigit():
-                if len(rating_string) < 3:
+                if len(rating_string)<3:
                     rating_string += k
             elif k=="escape":
                 core.quit()
@@ -514,20 +501,19 @@ def run_test_trial(angle_bias, color_cue, true_or_med, blue_final, green_final, 
     return accuracy, chosen_shape, chosen_conf, rating_value, tShape, prop_trial
 
 #############################################
-# Main Experiment (Wrapped in try/except/finally)
+# Main Experiment wrapped in try/except/finally
 #############################################
 
 try:
     # --- PRACTICE PHASE ---
     for angle_bias, color_cue in practice_conditions:
-        acc, chosen_shape, chosen_conf, rating_val, true_shape = run_practice_trial(
+        acc, chosen_shape, chosen_conf, r_val, true_shape = run_practice_trial(
             angle_bias, color_cue, blue_prop, green_prop
         )
-        # Staircase update
         if color_cue=="blue":
             blue_total   += 1
             blue_correct += acc
-            cur_acc = blue_correct / float(blue_total)
+            cur_acc = blue_correct/float(blue_total)
             if cur_acc > TARGET_BLUE:
                 blue_prop = max(0.0, blue_prop - STEP_SIZE)
             else:
@@ -536,7 +522,7 @@ try:
         else:
             green_total   += 1
             green_correct += acc
-            cur_acc = green_correct / float(green_total)
+            cur_acc = green_correct/float(green_total)
             if cur_acc > TARGET_GREEN:
                 green_prop = max(0.0, green_prop - STEP_SIZE)
             else:
@@ -549,7 +535,7 @@ try:
         thisExp.addData("true_shape", true_shape)
         thisExp.addData("chosen_shape", chosen_shape)
         thisExp.addData("chosen_conf", chosen_conf)
-        thisExp.addData("control_rating_0to100", rating_val)
+        thisExp.addData("control_rating_0to100", r_val)
         thisExp.addData("accuracy", acc)
         thisExp.addData("prop_used", used_prop)
         thisExp.addData("running_accuracy", cur_acc)
@@ -571,7 +557,6 @@ try:
     win.flip()
     event.waitKeys()
 
-    # For each color, 8 trials (4 true, 4 medium)
     num_each_color = 8
     num_true = 4
     num_med  = 4
@@ -608,7 +593,7 @@ try:
         color_cue  = cond["color"]
         true_or_med= cond["true_or_med"]
 
-        acc, chosen_shape, chosen_conf, rating_val, true_shape, prop_used = run_test_trial(
+        acc, chosen_shape, chosen_conf, r_val, true_shape, prop_used = run_test_trial(
             angle_bias, color_cue, true_or_med, blue_final, green_final, medium_prop
         )
 
@@ -619,16 +604,15 @@ try:
         thisExp.addData("true_shape", true_shape)
         thisExp.addData("chosen_shape", chosen_shape)
         thisExp.addData("chosen_conf", chosen_conf)
-        thisExp.addData("control_rating_0to100", rating_val)
+        thisExp.addData("control_rating_0to100", r_val)
         thisExp.addData("prop_used", prop_used)
         thisExp.addData("accuracy", acc)
         thisExp.nextEntry()
 
 except KeyboardInterrupt:
-    print("Experiment terminated prematurely. Saving data...")
+    print("Experiment terminated prematurely; saving data...")
 
 finally:
-    # Always save data, even if user quit early
     csv_path = os.path.join(data_path, filename + ".csv")
     thisExp.saveAsWideText(csv_path)
     print(f"Data saved to: {csv_path}")
