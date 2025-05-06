@@ -446,4 +446,4 @@ msg.text = "Thank you – task complete! Press any key."
 msg.draw(); win.flip(); event.waitKeys()                # final prompt
 
 win.close()                                             # close window
-core.quit()                                             # close experiment
+core.quit()                                             # quit experiment
