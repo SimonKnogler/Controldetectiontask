@@ -1,4 +1,39 @@
-This repository contains experiments and scripts for motion snippet generation.
+This repository contains experiments, data processing pipelines and GAN models
+for generating and presenting short **motion snippets**. These snippets are used
+in a psychophysics experiment referred to as the **Control Detection Task (CDT)**.
+
+## Repository layout
+
+- `Experiment/` and `Main Experiment/` – PsychoPy implementations of the CDT.
+  The `CDT.py` script in these folders presents motion snippets and collects
+  participants' responses.
+- `Motion Library/` – processed snippet library (`core_pool.npy`) together with
+  clustering metadata (`core_pool_feats.npy`, `core_pool_labels.npy`,
+  `scaler_params.json` and `cluster_centroids.json`). This folder also contains
+  `motionlib_create_filtered.py` which builds the library from raw donor
+  recordings.
+- `Scripts/` – helper utilities for recording raw donor motions and assembling
+  the master library.
+- `Technical Reports/` – PDF and figures describing the motion library.
+- `Trial Demo/` – short videos demonstrating the task.
+
+## The Control Detection Task
+
+`CDT.py` presents a moving dot controlled either fully or partially by the
+participant. After an initial demo phase the participant's movement features are
+compared with precomputed cluster centroids from the motion library. Subsequent
+trials draw snippets from the cluster that best matches the participant's style,
+ensuring motion cues are tailored to them. Responses are saved as CSV files in
+the experiment's `data/` directory.
+
+## Motion snippet creation
+
+Raw motion was recorded using the PsychoPy script in `Scripts/MLP.py`. Individual
+donor recordings were combined with `Scripts/lib_create.py`. The resulting traces
+were filtered and clustered by `Motion Library/motionlib_create_filtered.py`:
+snippets are sliced into 3‑second segments, low‑movement samples are discarded
+and K‑means clustering groups them into six style clusters. Scaler parameters and
+cluster centroids are saved for style‑matching during the CDT.
 
 ## GAN Scripts
 
