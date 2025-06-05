@@ -53,7 +53,7 @@ def generate_cgan_snippets(generator_path: str = "cgan_generator.pth", label: in
 if __name__ == "__main__":
     try:
         print("Attempting to generate snippets from conditional model...")
-        generate_cgan_snippets(num_samples=3, label=0)
+        generate_cgan_snippets(num_samples=5, label=0)
     except FileNotFoundError:
         print("Generator model file 'cgan_generator.pth' not found. Please train the model first by running conditional_gan_motion_generator.py.")
     except Exception as exc:
