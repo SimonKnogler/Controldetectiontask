@@ -1,3 +1,4 @@
+import argparse
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -51,11 +52,30 @@ def generate_cgan_snippets(generator_path: str = "cgan_generator.pth", label: in
     return generated
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Generate motion snippets using a trained conditional GAN"
+    )
+    parser.add_argument(
+        "--label",
+        type=int,
+        default=0,
+        help="Cluster label to condition the generator on",
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=3,
+        help="Number of snippets to generate",
+    )
+    args = parser.parse_args()
+
     try:
         print("Attempting to generate snippets from conditional model...")
-        generate_cgan_snippets(num_samples=5, label=0)
+        generate_cgan_snippets(num_samples=3, label=0)
     except FileNotFoundError:
-        print("Generator model file 'cgan_generator.pth' not found. Please train the model first by running conditional_gan_motion_generator.py.")
+        print(
+            "Generator model file 'cgan_generator.pth' not found. Please train the model first by running conditional_gan_motion_generator.py."
+        )
     except Exception as exc:
         print(f"An error occurred during generation: {exc}")
 

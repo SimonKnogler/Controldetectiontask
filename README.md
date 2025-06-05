@@ -45,6 +45,12 @@ cluster centroids are saved for style‑matching during the CDT.
 - `generate_cgan_snippets.py` – loads a conditional GAN generator and
   produces snippets for a chosen style label.
 
+Example usage:
+
+```bash
+python generate_cgan_snippets.py --label 2 --num-samples 5
+```
+
 To run tests:
 
 ```bash
