@@ -73,8 +73,7 @@ scaler_mean = np.array(scp["mean"], dtype=np.float32)   # shape (6,)
 scaler_std  = np.array(scp["std"],  dtype=np.float32)   # shape (6,)
 
 # Load cluster centroids (6 × 6 matrix) saved by motionlib_create_filtered.py
-# Modified line 76
-with open("/Users/simonknogler/Desktop/PhD/Controldetectiontask/Motion Library/cluster_centroids.json", "r") as f:
+with open("cluster_centroids.json", "r") as f:
     CLUSTER_CENTROIDS = np.array(json.load(f), dtype=np.float32)  # shape (6, 6)
 
 # Initialize cluster_id (will be set after demo)
