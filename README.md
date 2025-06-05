@@ -28,9 +28,8 @@ the experiment's `data/` directory.
 
 ## Motion snippet creation
 
-Raw motion was recorded using the PsychoPy script in `Scripts/MLP.py`. Individual
-donor recordings were combined with `Scripts/lib_create.py`. The resulting traces
-were filtered and clustered by `Motion Library/motionlib_create_filtered.py`:
+Raw motion was recorded using the PsychoPy script in `Motion Library/Experiment Pavlovia`. Individual
+recordings were combined, filtered and clustered by `Motion Library/motionlib_create_filtered.py`:
 snippets are sliced into 3‑second segments, low‑movement samples are discarded
 and K‑means clustering groups them into six style clusters. Scaler parameters and
 cluster centroids are saved for style‑matching during the CDT.
