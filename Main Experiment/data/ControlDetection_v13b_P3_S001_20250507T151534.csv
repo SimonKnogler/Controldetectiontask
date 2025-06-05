@@ -1,0 +1,2 @@
+﻿snippet_id,catch_type,phase,angle_bias,expect_level,true_shape,resp_shape,conf_level,accuracy,rt_choice,agency_rating,prop_used,participant,session,low_precision_colour,high_precision_colour,
+1,,practice,90,low,dot,dot,3,1,1.4346225000335835,90.0,0.5,3,001,green,blue,

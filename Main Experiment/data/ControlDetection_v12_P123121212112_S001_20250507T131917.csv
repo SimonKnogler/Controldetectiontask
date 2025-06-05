@@ -1,0 +1,3 @@
+﻿snippet_id,phase,angle_bias,expect_level,mode,true_shape,resp_shape,conf_level,accuracy,control_rating,prop_used,participant,session,low_precision_colour,high_precision_colour,
+2,practice,90,high,true,dot,square,2,0,84.0,0.8,123121212112,001,blue,green,
+6,practice,0,high,true,dot,square,1,0,90.0,0.8,123121212112,001,blue,green,

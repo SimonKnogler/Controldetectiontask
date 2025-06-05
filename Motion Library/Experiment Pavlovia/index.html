@@ -1,0 +1,46 @@
+<!doctype html>
+<!--
+index.html  – minimal shell to run motionlibrary.js on Pavlovia
+Copy-paste this file into your GitLab repo (same folder as motionlibrary.js).
+-->
+<html>
+<head>
+  <!-- meta & viewport -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  <!-- browser tab title -->
+  <title>motion library [PsychoJS]</title>
+
+  <!-- PsychoJS default CSS (ships with PsychoPy; Builder exported it to /lib/) -->
+  <link rel="stylesheet" href="./lib/psychojs-2024.2.4.css">
+</head>
+
+<body>
+  <!-- PsychoJS injects its WebGL canvas inside this div -->
+  <div id="root"></div>
+
+  <!-- external libraries PsychoJS expects -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist@1.12.1/jquery-ui.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/preloadjs@1.0/lib/preloadjs.min.js"></script>
+
+  <!-- OVERRIDE default CSV‐download: make save() a no‐op -->
+  <script>
+    // Once PsychoJS is loaded, overwrite its experiment.save method
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.psychoJS && window.psychoJS.experiment) {
+        window.psychoJS.experiment.save = () => {
+          console.log('auto-save overridden: no local download');
+        };
+      }
+    });
+  </script>
+
+  <!-- main experiment code hand-translated from Python -->
+  <script type="module" src="./motionlibrary.js"></script>
+
+  <!-- optional legacy fallback for very old browsers -->
+  <!-- <script nomodule src="./motionlibrary-legacy-browsers.js"></script> -->
+</body>
+</html>
