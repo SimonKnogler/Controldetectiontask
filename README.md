@@ -1,6 +1,6 @@
 This repository contains experiments, data processing pipelines and GAN models
 for generating and presenting short **motion snippets**. These snippets are used
-in a psychophysics experiment referred to as the **Control Detection Task (CDT)**.
+in a psychophysics experiment referred to as **Control Detection Task (CDT)**.
 
 ## Repository layout
 
