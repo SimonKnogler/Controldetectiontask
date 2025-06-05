@@ -74,7 +74,7 @@ visual.TextStim(
     win, color="white", height=32, wrapWidth=1600, alignText='center',
     text=(
         "Thank you for participating in our experiment.\n"
-        "In the following game you will see two shapes whose movement will be .\n"
+        "In the following game you will see two shapes whose movement will be partly computer-controlled.\n"
         "Move continuously for 3 s; then they freeze.\n"
         "Click the one you think you controlled!\n"
         "Press S to start."
