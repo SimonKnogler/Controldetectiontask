@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 DATA_PATH = os.path.join("Motion Library", "core_pool.npy")
 LABEL_PATH = os.path.join("Motion Library", "core_pool_labels.npy")
 BATCH_SIZE = 8
-EPOCHS = 1000
+EPOCHS = 500
 LATENT_DIM = 32
 HIDDEN_SIZE = 64
 NUM_CLASSES = 6
