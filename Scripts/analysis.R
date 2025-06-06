@@ -1,0 +1,94 @@
+# Example R analysis script for the Control Detection Task
+# This script loads all CSV files in the Main Experiment/data folder
+# and performs signal detection and metacognitive analyses.
+
+library(tidyverse)
+library(lme4)
+library(ez)
+# HMetaD is used for computing meta-d' and Mratio
+library(HMetaD)
+
+# helper: compute d'
+dprime_calc <- function(hits, fas, miss, cr) {
+  hr <- (hits + 0.5) / (hits + miss + 1)
+  far <- (fas + 0.5) / (fas + cr + 1)
+  qnorm(hr) - qnorm(far)
+}
+
+# directory with participant CSVs
+DATA_DIR <- file.path('Main Experiment', 'data')
+files <- list.files(DATA_DIR, pattern = '\\.[cC][sS][vV]$', full.names = TRUE)
+
+# load and combine
+raw_list <- lapply(files, read.csv)
+data <- bind_rows(raw_list)
+
+# keep test trials only
+trial_data <- data %>%
+  filter(phase == 'test') %>%
+  mutate(correct = resp_shape == true_shape,
+         expect = factor(expect_level, levels = c('low', 'high')),
+         bias = factor(angle_bias))
+
+# compute sensitivity and metacognitive measures per participant and condition
+analysis <- trial_data %>%
+  group_by(participant, expect, bias) %>%
+  group_modify(~{
+    df <- .x
+    hits <- sum(df$true_shape == 'square' & df$resp_shape == 'square')
+    fas  <- sum(df$true_shape == 'dot'    & df$resp_shape == 'square')
+    miss <- sum(df$true_shape == 'square' & df$resp_shape == 'dot')
+    cr   <- sum(df$true_shape == 'dot'    & df$resp_shape == 'dot')
+    dprime <- dprime_calc(hits, fas, miss, cr)
+    counts <- trials2counts(
+      stimID   = ifelse(df$true_shape == 'square', 1, 0),
+      response = ifelse(df$resp_shape == 'square', 1, 0),
+      rating   = df$conf_level,
+      nRatings = max(df$conf_level, na.rm = TRUE),
+      padCells = 1)
+    fit <- fit_metad_indiv(unlist(counts[[1]]), unlist(counts[[2]]))
+    meta_d <- summary(fit[[1]])$statistics['meta_d', 'Mean']
+    tibble(
+      accuracy = mean(df$correct, na.rm = TRUE),
+      dprime = dprime,
+      meta_d = meta_d,
+      Mratio = meta_d / dprime,
+      conf = mean(df$conf_level, na.rm = TRUE),
+      agency = mean(df$agency_rating, na.rm = TRUE)
+    )
+  }) %>%
+  ungroup()
+
+# repeated measures ANOVAs
+anova_conf <- ezANOVA(data = analysis, dv = conf, wid = participant,
+                      within = .(expect, bias))
+anova_agency <- ezANOVA(data = analysis, dv = agency, wid = participant,
+                        within = .(expect, bias))
+anova_dprime <- ezANOVA(data = analysis, dv = dprime, wid = participant,
+                        within = .(expect, bias))
+print(anova_conf)
+print(anova_agency)
+print(anova_dprime)
+
+# expectation effect during medium control strength (prop_used ~ 0.5)
+medium_data <- trial_data %>% filter(abs(prop_used - 0.5) < 1e-6)
+
+expect_effect <- medium_data %>%
+  group_by(participant, bias, expect) %>%
+  summarise(conf = mean(conf_level, na.rm = TRUE),
+            agency = mean(agency_rating, na.rm = TRUE), .groups = 'drop') %>%
+  pivot_wider(names_from = expect, values_from = c(conf, agency)) %>%
+  mutate(conf_effect = conf_high - conf_low,
+         agency_effect = agency_high - agency_low)
+
+baseline <- analysis %>%
+  filter(expect == 'low') %>%
+  group_by(participant) %>%
+  summarise(baseline_dprime = mean(dprime), .groups = 'drop')
+
+effects <- left_join(expect_effect, baseline, by = 'participant')
+
+conf_model <- lmer(conf_effect ~ baseline_dprime * bias + (1|participant), data = effects)
+agency_model <- lmer(agency_effect ~ baseline_dprime * bias + (1|participant), data = effects)
+print(summary(conf_model))
+print(summary(agency_model))

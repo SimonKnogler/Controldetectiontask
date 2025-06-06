@@ -64,3 +64,16 @@ Both `Experiment/CDT.py` and `Main Experiment/CDT.py` now provide an optional
 artificial mouse movements and key presses so that CSV data can be produced
 without a human participant. This is useful for quickly testing analysis
 pipelines during piloting.
+
+## Data analysis
+
+An example R script for analysing output CSV files is available in `Scripts/analysis.R`.
+It aggregates participant data, computes accuracy, d-prime and metacognitive measures using
+Fleming's HMeta-d toolbox, and performs the repeated measures ANOVA and mixed-effects
+models described in the main analysis plan.
+
+Run the script from the repository root with:
+
+```bash
+Rscript Scripts/analysis.R
+```
