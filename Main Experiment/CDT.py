@@ -32,9 +32,11 @@ atexit.register(_save)
 #  Participant dialog
 # ───────────────────────────────────────────────────────
 expName = "ControlDetection_v16.1_style_matched"
-expInfo = {"participant":"", "session":"001"}
-if not SIMULATE and not gui.DlgFromDict(expInfo, title=expName).OK:
+expInfo = {"participant": "", "session": "001", "simulate": False}
+dlg = gui.DlgFromDict(expInfo, order=["participant", "session", "simulate"], title=expName)
+if not dlg.OK:
     core.quit()
+SIMULATE = bool(expInfo.pop("simulate"))
 if SIMULATE:
     expInfo["participant"] = "SIM"
 
@@ -83,6 +85,33 @@ cluster_id = None
 # RNG seeded by participant ID for reproducibility
 seed = int(hashlib.sha256(expInfo["participant"].encode()).hexdigest(),16) & 0xFFFFFFFF
 rng  = np.random.default_rng(seed)
+
+# -------------------------------------------------------------------
+#  Helpers for simulation mode
+# -------------------------------------------------------------------
+class SimulatedMouse:
+    """Very simple mouse stand-in used when SIMULATE is True."""
+
+    def __init__(self):
+        self._pos = np.array([0.0, 0.0], dtype=float)
+
+    def setPos(self, pos=(0, 0)):
+        self._pos = np.array(pos, dtype=float)
+
+    def getPos(self):
+        self._pos += rng.normal(0, 3, 2)
+        return self._pos.tolist()
+
+
+def wait_keys(keys=None):
+    """Wrapper around event.waitKeys that auto-selects a key when SIMULATE."""
+    if SIMULATE:
+        if keys is None:
+            core.wait(0.2)
+            return ["space"]
+        allowed = [k for k in keys if k != "escape"] or ["space"]
+        return [rng.choice(allowed)]
+    return event.waitKeys(keyList=keys)
 
 # ───────────────────────────────────────────────────────
 #  Helper: assign a participant to the closest style cluster
@@ -172,7 +201,7 @@ def demo():
 
     # Instructions
     msg.text = "30‐s DEMO – one shape mostly follows your mouse.\nPress any key."
-    msg.draw(); win.flip(); event.waitKeys()
+    msg.draw(); win.flip(); wait_keys()
     fix.draw(); win.flip(); core.wait(0.5)
 
     # Randomize initial positions of square & dot
@@ -187,7 +216,8 @@ def demo():
     speeds = []          # store instantaneous speeds for demo
 
     # Initialize mouse & timing
-    mouse = event.Mouse(win=win, visible=not SIMULATE); mouse.setPos((0, 0))
+    mouse = SimulatedMouse() if SIMULATE else event.Mouse(win=win, visible=True)
+    mouse.setPos((0, 0))
     last = (0, 0)
     frame = 0
     clk = core.Clock()
@@ -378,14 +408,15 @@ def run_trial(phase, angle_bias, expect_level, mode, catch_type=""):
     (ou_x, ou_y), snip_id = sample_snippet_scaled()
 
     # Initialize mouse
-    mouse = event.Mouse(win=win, visible=not SIMULATE); mouse.setPos((0, 0))
+    mouse = SimulatedMouse() if SIMULATE else event.Mouse(win=win, visible=True)
+    mouse.setPos((0, 0))
     last = mouse.getPos()
     # Wait for movement to start (skip 0‐movement frames)
     while True:
         x, y = mouse.getPos()
-        if math.hypot(x - last[0], y - last[1]) > 0:
+        if math.hypot(x - last[0], y - last[1]) > 0 or SIMULATE:
             break
-        if event.getKeys(["escape"]):
+        if not SIMULATE and event.getKeys(["escape"]):
             _save(); core.quit()
 
     clk = core.Clock(); frame = 0
@@ -433,7 +464,7 @@ def run_trial(phase, angle_bias, expect_level, mode, catch_type=""):
     )
     msg.draw(); win.flip()
     t0 = core.getTime()
-    key = event.waitKeys(keyList=CONF_KEYS + ["escape"])[0]
+    key = wait_keys(CONF_KEYS + ["escape"])[0]
     rt_choice = core.getTime() - t0
     if key == "escape":
         _save(); core.quit()
@@ -448,19 +479,22 @@ def run_trial(phase, angle_bias, expect_level, mode, catch_type=""):
 
     rating = np.nan
     if phase == "test":
-        slider = visual.Slider(
-            win, pos=(0, -250), size=(600, 40),
-            ticks=(0, 100), labels=("0","100"),
-            granularity=1, style='rating',
-            labelHeight=24, color='white', fillColor='white'
-        )
-        msg.text = "How much control did you feel?"
-        msg.draw(); slider.draw(); win.flip()
-        while slider.rating is None:
-            slider.draw(); msg.draw(); win.flip()
-            if event.getKeys(["escape"]):
-                _save(); core.quit()
-        rating = float(slider.rating); core.wait(0.2)
+        if SIMULATE:
+            rating = float(rng.integers(0, 101))
+        else:
+            slider = visual.Slider(
+                win, pos=(0, -250), size=(600, 40),
+                ticks=(0, 100), labels=("0","100"),
+                granularity=1, style='rating',
+                labelHeight=24, color='white', fillColor='white'
+            )
+            msg.text = "How much control did you feel?"
+            msg.draw(); slider.draw(); win.flip()
+            while slider.rating is None:
+                slider.draw(); msg.draw(); win.flip()
+                if not SIMULATE and event.getKeys(["escape"]):
+                    _save(); core.quit()
+            rating = float(slider.rating); core.wait(0.2)
 
     if phase == "practice" and catch_type == "":
         if correct:
@@ -487,7 +521,7 @@ def run_trial(phase, angle_bias, expect_level, mode, catch_type=""):
 PPC = 3
 practice = [(m, e) for m in MODES for e in EXPECT] * PPC
 random.shuffle(practice)
-msg.text = "PRACTICE – Press any key."; msg.draw(); win.flip(); event.waitKeys()
+msg.text = "PRACTICE – Press any key."; msg.draw(); win.flip(); wait_keys()
 for m, e in practice:
     res = run_trial("practice", m, e, "true")
     for k, v in res.items():
@@ -510,7 +544,7 @@ conds = main_trials + catch_trials
 types = [""] * len(main_trials) + catch_trials
 combined = list(zip(conds, types)); rng.shuffle(combined)
 
-msg.text = "MAIN BLOCK – Press any key."; msg.draw(); win.flip(); event.waitKeys()
+msg.text = "MAIN BLOCK – Press any key."; msg.draw(); win.flip(); wait_keys()
 t = 0
 for cond, ctype in combined:
     if ctype == "full":
@@ -522,12 +556,13 @@ for cond, ctype in combined:
     thisExp.nextEntry()
     t += 1
     if t % BREAK_EVERY == 0 and not SIMULATE:
-        msg.text = "Break – press any key"; msg.draw(); win.flip(); event.waitKeys()
+        msg.text = "Break – press any key"; msg.draw(); win.flip(); wait_keys()
 
 # ───────────────────────────────────────────────────────
 #  Save & quit
 # ───────────────────────────────────────────────────────
 thisExp.saveAsWideText(csv_path)
 print("Saved ➜", csv_path)
-msg.text = "Thank you – task complete! Press any key."; msg.draw(); win.flip(); event.waitKeys()
+msg.text = "Thank you – task complete! Press any key."; msg.draw(); win.flip(); wait_keys()
 win.close(); core.quit()
+

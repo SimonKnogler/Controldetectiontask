@@ -56,3 +56,11 @@ To run tests:
 ```bash
 pytest -q
 ```
+
+## Simulation mode
+
+Both `Experiment/CDT.py` and `Main Experiment/CDT.py` now provide an optional
+*Simulate* checkbox in the startup dialog. When enabled, the task generates
+artificial mouse movements and key presses so that CSV data can be produced
+without a human participant. This is useful for quickly testing analysis
+pipelines during piloting.
