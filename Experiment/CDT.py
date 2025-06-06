@@ -14,7 +14,7 @@ import numpy as np
 from psychopy import visual, event, core, data, gui 
 
 
-SIMULATE = False
+SIMULATE = True
 
 # ───────────────────────────────────────────────────────
 #  Auto‐save on quit

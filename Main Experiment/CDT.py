@@ -14,7 +14,7 @@ import numpy as np
 from psychopy import visual, event, core, data, gui 
 
 
-SIMULATE = False
+SIMULATE = True
 
 # ───────────────────────────────────────────────────────
 #  Auto‐save on quit
@@ -222,7 +222,7 @@ def demo():
     frame = 0
     clk = core.Clock()
     # Run for 30 seconds (3 s × 10 blocks = 30 s)
-    while clk.getTime() < 30.0:
+    while clk.getTime() < 5.0: #30seconds
         x, y = mouse.getPos()
         # Record current position
         demo_positions.append((x, y))
