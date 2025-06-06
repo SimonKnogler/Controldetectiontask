@@ -4,7 +4,7 @@ in a psychophysics experiment referred to as **Control Detection Task (CDT)**.
 
 ## Repository layout
 
-- `Experiment/` and `Main Experiment/` – PsychoPy implementations of the CDT.
+- `Main Experiment/` – PsychoPy implementations of the CDT.
   The `CDT.py` script in these folders presents motion snippets and collects
   participants' responses.
 - `Motion Library/` – processed snippet library (`core_pool.npy`) together with
