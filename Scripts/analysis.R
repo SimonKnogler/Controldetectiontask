@@ -7,6 +7,8 @@ library(lme4)
 library(ez)
 # HMetaD is used for computing meta-d' and Mratio
 library(HMetaD)
+# create directory for plots
+if (!dir.exists('Plots')) dir.create('Plots')
 
 # helper: compute d'
 dprime_calc <- function(hits, fas, miss, cr) {
@@ -92,3 +94,53 @@ conf_model <- lmer(conf_effect ~ baseline_dprime * bias + (1|participant), data 
 agency_model <- lmer(agency_effect ~ baseline_dprime * bias + (1|participant), data = effects)
 print(summary(conf_model))
 print(summary(agency_model))
+
+# ----- plotting -----
+summary_data <- analysis %>%
+  group_by(expect, bias) %>%
+  summarise(
+    conf_m = mean(conf),
+    conf_se = sd(conf)/sqrt(n()),
+    agency_m = mean(agency),
+    agency_se = sd(agency)/sqrt(n()),
+    dprime_m = mean(dprime),
+    dprime_se = sd(dprime)/sqrt(n()),
+    .groups = 'drop'
+  )
+
+conf_plot <- ggplot(summary_data, aes(expect, conf_m, fill = bias)) +
+  geom_col(position = position_dodge()) +
+  geom_errorbar(aes(ymin = conf_m - conf_se, ymax = conf_m + conf_se),
+                width = 0.2, position = position_dodge(width = 0.9)) +
+  labs(title = 'Confidence by expectation and bias',
+       y = 'Confidence', x = 'Expectation')
+ggsave(file.path('Plots', 'conf_plot.png'), conf_plot, width = 6, height = 4)
+
+agency_plot <- ggplot(summary_data, aes(expect, agency_m, fill = bias)) +
+  geom_col(position = position_dodge()) +
+  geom_errorbar(aes(ymin = agency_m - agency_se, ymax = agency_m + agency_se),
+                width = 0.2, position = position_dodge(width = 0.9)) +
+  labs(title = 'Agency rating by expectation and bias',
+       y = 'Agency rating', x = 'Expectation')
+ggsave(file.path('Plots', 'agency_plot.png'), agency_plot, width = 6, height = 4)
+
+dprime_plot <- ggplot(summary_data, aes(expect, dprime_m, fill = bias)) +
+  geom_col(position = position_dodge()) +
+  geom_errorbar(aes(ymin = dprime_m - dprime_se, ymax = dprime_m + dprime_se),
+                width = 0.2, position = position_dodge(width = 0.9)) +
+  labs(title = "d' by expectation and bias", y = "d'", x = 'Expectation')
+ggsave(file.path('Plots', 'dprime_plot.png'), dprime_plot, width = 6, height = 4)
+
+conf_eff_plot <- ggplot(effects, aes(baseline_dprime, conf_effect, color = bias)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(title = "Confidence expectation effect vs baseline d'",
+       y = 'High - Low confidence', x = "Baseline d'")
+ggsave(file.path('Plots', 'conf_effect_plot.png'), conf_eff_plot, width = 6, height = 4)
+
+agency_eff_plot <- ggplot(effects, aes(baseline_dprime, agency_effect, color = bias)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(title = "Agency expectation effect vs baseline d'",
+       y = 'High - Low agency', x = "Baseline d'")
+ggsave(file.path('Plots', 'agency_effect_plot.png'), agency_eff_plot, width = 6, height = 4)
