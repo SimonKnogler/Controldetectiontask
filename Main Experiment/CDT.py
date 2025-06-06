@@ -3,7 +3,7 @@
 """
 control_detection_task_v16.1_style_matched.py
 ─────────────────────────────────────────────
-Modified from v16.1 to implement style‐matching: 
+Modified from v16.1 to implement style‐matching:
 • Loads motion snippets from CORE_POOL (6 clusters × 400 snippets each).
 • After demo, computes participant’s movement features and assigns to a cluster.
 • sample_snippet_scaled() draws only from that participant’s cluster and speed‐matches.
@@ -11,7 +11,7 @@ Modified from v16.1 to implement style‐matching:
 
 import os, sys, math, random, pathlib, datetime, atexit, hashlib, json
 import numpy as np
-from psychopy import visual, event, core, data, gui 
+from psychopy import visual, event, core, data, gui
 
 
 SIMULATE = True
@@ -144,12 +144,6 @@ def assign_cluster(demo_mean_speed, demo_mean_turn, demo_straightness):
     # Return index (0..5) of the nearest centroid
     return int(np.argmin(dists))
 
-
-# ───────────────────────────────────────────────────────
-#  One speed estimate per snippet (for optional debugging; not used below)
-# ───────────────────────────────────────────────────────
-# snippet_speeds = np.linalg.norm(motion_pool, axis=2).mean(1)  # array length 2400
-
 # ───────────────────────────────────────────────────────
 #  Paths & ExperimentHandler
 # ───────────────────────────────────────────────────────
@@ -186,10 +180,9 @@ rotate  = lambda vx, vy, a: (
 # ───────────────────────────────────────────────────────
 #  Draw without replacement: queue of global indices
 # ───────────────────────────────────────────────────────
-# We will draw from the entire pool if needed, 
+# We will draw from the entire pool if needed,
 # but in style‐matched sampling we only use CLUSTER_POOLS and compute velocities directly.
 snippet_queue = []  # not used in style‐matched; kept for consistency
-
 
 # ───────────────────────────────────────────────────────
 #  30‐s demo: record positions, then compute features & assign cluster
@@ -222,7 +215,7 @@ def demo():
     frame = 0
     clk = core.Clock()
     # Run for 30 seconds (3 s × 10 blocks = 30 s)
-    while clk.getTime() < 5.0: #30seconds
+    while clk.getTime() < 30.0:
         x, y = mouse.getPos()
         # Record current position
         demo_positions.append((x, y))
@@ -288,6 +281,7 @@ def demo():
     cluster_id = assign_cluster(demo_mean_speed, demo_mean_turn, demo_straightness)
     print(f"Participant assigned to cluster {cluster_id}")
 
+
 # Helper: sample_snippet (no scaling, for demo)
 def sample_snippet():
     """
@@ -301,6 +295,7 @@ def sample_snippet():
     idx = snippet_queue.pop()
     # Return (2 × SNIP_LEN array), idx
     return motion_pool[idx].astype(np.float32).T, idx
+
 
 # ───────────────────────────────────────────────────────
 #  Modified sample_snippet_scaled() for style‐matching
@@ -340,28 +335,12 @@ def sample_snippet_scaled():
     # 8· Return velocities and the local index (0..399)
     return vel_scaled, local_idx
 
-# ───────────────────────────────────────────────────────
-#  Window & stimuli remain the same
-# ───────────────────────────────────────────────────────
-win         = visual.Window((1920,1080), fullscr=not SIMULATE,
-                            color=[0.5]*3, units="pix")
-square      = visual.Rect(win, 40, 40, fillColor="black", lineColor="black")
-dot         = visual.Circle(win, 20, fillColor="black", lineColor="black")
-fix         = visual.TextStim(win, "+", color="white", height=30)
-msg         = visual.TextStim(win, "", color="white", height=26, wrapWidth=1000)
-feedbackTxt = visual.TextStim(win, "", color="black", height=80)
-
-# Re‐define these lambdas since we redrew window objects
-confine = lambda p, l=250: p if (r := math.hypot(*p)) <= l else (p[0]*l/r, p[1]*l/r)
-rotate  = lambda vx, vy, a: (
-    vx * math.cos(math.radians(a)) - vy * math.sin(math.radians(a)),
-    vx * math.sin(math.radians(a)) + vy * math.cos(math.radians(a))
-)
 
 # ───────────────────────────────────────────────────────
 #  30‐s demo: get participant cluster assignment
 # ───────────────────────────────────────────────────────
 demo()   # After this call, avg_demo_speed and cluster_id are set
+
 
 # ───────────────────────────────────────────────────────
 #  Staircase parameters (unchanged)
@@ -378,6 +357,7 @@ BREAK_EVERY=3; LOWPASS=0.8
 CONF_KEYS=["1","2","3","4"]
 SHAPE_FROM_KEY={"1":"square","2":"square","3":"dot","4":"dot"}
 CONF_FROM_KEY={k:i+1 for i,k in enumerate(CONF_KEYS)}
+
 
 # ───────────────────────────────────────────────────────
 #  Trial function (uses dynamic SNIP_LEN, style‐matched sampling)
@@ -482,6 +462,9 @@ def run_trial(phase, angle_bias, expect_level, mode, catch_type=""):
         if SIMULATE:
             rating = float(rng.integers(0, 101))
         else:
+            # Re-initialize the mouse to ensure it is active for the slider
+            mouse = event.Mouse(win=win, visible=True)
+            
             slider = visual.Slider(
                 win, pos=(0, -250), size=(600, 40),
                 ticks=(0, 100), labels=("0","100"),
@@ -561,8 +544,5 @@ for cond, ctype in combined:
 # ───────────────────────────────────────────────────────
 #  Save & quit
 # ───────────────────────────────────────────────────────
-thisExp.saveAsWideText(csv_path)
-print("Saved ➜", csv_path)
 msg.text = "Thank you – task complete! Press any key."; msg.draw(); win.flip(); wait_keys()
 win.close(); core.quit()
-
