@@ -68,9 +68,9 @@ pipelines during piloting.
 ## Data analysis
 
 An example R script for analysing output CSV files is available in `Scripts/analysis.R`.
-It aggregates participant data, computes accuracy, d-prime and metacognitive measures using
-Fleming's HMeta-d toolbox, performs the repeated measures ANOVA and mixed-effects
-models described in the main analysis plan, and saves several summary figures under `Plots/`.
+It aggregates participant data, computes accuracy, d-prime, confidence and agency measures,
+performs the repeated measures ANOVA and mixed-effects models described in the main analysis plan,
+and saves several summary figures under `Plots/`.
 
 Run the script from the repository root with:
 

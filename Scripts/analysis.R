@@ -2,11 +2,10 @@
 # This script loads all CSV files in the Main Experiment/data folder
 # and performs signal detection and metacognitive analyses.
 
+# Required packages
 library(tidyverse)
 library(lme4)
 library(ez)
-# HMetaD is used for computing meta-d' and Mratio
-library(HMetaD)
 # create directory for plots
 if (!dir.exists('Plots')) dir.create('Plots')
 
@@ -42,19 +41,9 @@ analysis <- trial_data %>%
     miss <- sum(df$true_shape == 'square' & df$resp_shape == 'dot')
     cr   <- sum(df$true_shape == 'dot'    & df$resp_shape == 'dot')
     dprime <- dprime_calc(hits, fas, miss, cr)
-    counts <- trials2counts(
-      stimID   = ifelse(df$true_shape == 'square', 1, 0),
-      response = ifelse(df$resp_shape == 'square', 1, 0),
-      rating   = df$conf_level,
-      nRatings = max(df$conf_level, na.rm = TRUE),
-      padCells = 1)
-    fit <- fit_metad_indiv(unlist(counts[[1]]), unlist(counts[[2]]))
-    meta_d <- summary(fit[[1]])$statistics['meta_d', 'Mean']
     tibble(
       accuracy = mean(df$correct, na.rm = TRUE),
       dprime = dprime,
-      meta_d = meta_d,
-      Mratio = meta_d / dprime,
       conf = mean(df$conf_level, na.rm = TRUE),
       agency = mean(df$agency_rating, na.rm = TRUE)
     )
